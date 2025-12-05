@@ -1,3 +1,14 @@
+# x3fuse
+
+A cli tool to mount game vfs into specific folder, using all game rules.
+Written using AI mostly
+
+```
+Usage: ./build/x3fuse <data-dir> <mountpoint> [fuse options]
+Example: ./build/x3fuse ./x3fl /mnt/x3 -f
+```
+
+
 # x3_datatool
 
 A command-line, Linux-focused tool for managing X3 data files. Works with paired `.cat` (catalog/index) and `.dat` (data) files that use XOR encryption.
