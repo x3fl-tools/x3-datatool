@@ -8,6 +8,7 @@
 #include <iostream>
 #include <filesystem>
 #include <iomanip>
+#include <algorithm>
 
 #define dat_magic 0x33
 #define init_magic 0xdb
@@ -97,6 +98,52 @@ bool datafile::parse(const std::filesystem::path& catfilename) {
 	m_catfile = catfilename.string();
 	set_datafile(datfilename);
 
+	return true;
+}
+
+std::optional<datafile::file_record> datafile::get_file_record(const std::string& filename, bool strict_match) const {
+	for (const auto& entry : m_index) {
+		if (strict_match ? (entry == filename) : entry.filename_match(filename)) {
+			return file_record{entry.relpath, entry.offset, entry.size};
+		}
+	}
+
+	return std::nullopt;
+}
+
+bool datafile::read_file_range(const file_record& record, size_t offset, size_t size, std::string& out) const {
+	if (offset > record.size) {
+		return false;
+	}
+
+	const size_t available = record.size - offset;
+	const size_t read_len = std::min<size_t>(size, available);
+
+	std::ifstream encoded_datafile(m_datfile, std::ios::in | std::ios::binary);
+	if (!encoded_datafile) {
+		return false;
+	}
+
+	if (read_len == 0) {
+		out.clear();
+		return true;
+	}
+
+	encoded_datafile.seekg(record.offset + offset);
+	std::string buffer;
+	buffer.resize(read_len);
+	encoded_datafile.read(buffer.data(), read_len);
+	const auto got = static_cast<size_t>(encoded_datafile.gcount());
+	if (got == 0 && read_len > 0) {
+		return false;
+	}
+
+	for (size_t i = 0; i < got; ++i) {
+		buffer[i] ^= dat_magic;
+	}
+
+	buffer.resize(got);
+	out.swap(buffer);
 	return true;
 }
 
@@ -333,18 +380,32 @@ bool datafile::extract(const std::filesystem::path& output_path) const {
 }
 
 void datafile::set_datafile(const std::string& datafile) {
-	std::filesystem::path cfpath(m_catfile);
-	// For some reason, 13.cat has a bogus datafile. How does the game even load it?
-	if (!std::filesystem::exists(datafile)) {
-		// Try using the cat file to look for an equivalent dat file
-		cfpath.replace_extension(".dat");
-		if (std::filesystem::exists(cfpath)) {
-			m_datfile = cfpath;
-		} else {
-			// OK, file doesn't exist...might as well just use the one we're given
-			m_datfile = datafile;
-		}
-	} else {
-		m_datfile = datafile;
+	std::filesystem::path cat_path(m_catfile);
+	std::filesystem::path candidate(datafile);
+
+	// Prefer an absolute path if given and it exists
+	if (candidate.is_absolute() && std::filesystem::exists(candidate)) {
+		m_datfile = candidate;
+		return;
 	}
+
+	// Try resolving relative to the cat's directory
+	std::filesystem::path cat_dir = cat_path.parent_path();
+	if (!candidate.is_absolute()) {
+		std::filesystem::path rel_candidate = cat_dir / candidate;
+		if (std::filesystem::exists(rel_candidate)) {
+			m_datfile = rel_candidate;
+			return;
+		}
+	}
+
+	// Fallback: swap extension on the cat file
+	cat_path.replace_extension(".dat");
+	if (std::filesystem::exists(cat_path)) {
+		m_datfile = cat_path;
+		return;
+	}
+
+	// Last resort: keep whatever was provided
+	m_datfile = candidate.string();
 }

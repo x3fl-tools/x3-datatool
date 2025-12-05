@@ -41,6 +41,11 @@ public:
 	size_t size() const { return m_dir_idx.size(); }
 	bool has_id(uint32_t id) const { return m_dir_idx.find(id) != m_dir_idx.end(); }
 
+	/**
+	 * Build a map of file paths to the datafile that owns the highest-precedence copy.
+	 */
+	std::map<std::string, datafile*> build_precedence_map();
+
 private:
 	uint32_t get_id_from_filename(const std::string& filename) const;
 

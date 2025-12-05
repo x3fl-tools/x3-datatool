@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <memory>
 #include <vector>
+#include <optional>
 
 /**
  * Represents a single cat / dat pair.
@@ -82,6 +83,25 @@ public:
 
 		return ret;
 	}
+
+	/**
+	 * Represents one catalog entry with metadata that callers can safely use.
+	 */
+	struct file_record {
+		std::string relpath;
+		uint32_t offset;
+		uint32_t size;
+	};
+
+	/**
+	 * Find a file by path (or filename) and return metadata needed to read it.
+	 */
+	std::optional<file_record> get_file_record(const std::string& filename, bool strict_match = false) const;
+
+	/**
+	 * Read a portion of a file into a string, decoding on the fly.
+	 */
+	bool read_file_range(const file_record& record, size_t offset, size_t size, std::string& out) const;
 
 	/**
 	 * Check if this datafile contains a file with the given name.

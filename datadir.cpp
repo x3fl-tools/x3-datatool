@@ -9,7 +9,7 @@
 
 datadir::datadir(const std::string& path) : m_largest_id(0) {
 	// Iterate through all files in the path, looking for cat files
-	std::filesystem::path dir_path(path);
+	std::filesystem::path dir_path = std::filesystem::absolute(std::filesystem::path(path));
 
 	// Check if directory exists
 	if (!std::filesystem::exists(dir_path) || !std::filesystem::is_directory(dir_path)) {
@@ -33,8 +33,10 @@ datadir::datadir(const std::string& path) : m_largest_id(0) {
 bool datadir::add(const std::string& datafile_path) {
 	// Get the ID from the filename
 	uint32_t id;
+	std::filesystem::path full_path = std::filesystem::absolute(std::filesystem::path(datafile_path));
+
 	try {
-		id = get_id_from_filename(datafile_path);
+		id = get_id_from_filename(full_path.string());
 	} catch (const std::exception&) {
 		// Failed to parse ID from filename
 		return false;
@@ -46,8 +48,8 @@ bool datadir::add(const std::string& datafile_path) {
 	}
 
 	// Store the mappings
-	m_name_map[datafile_path] = id;
-	m_dir_idx.emplace(id, datafile_path);
+	m_name_map[full_path.string()] = id;
+	m_dir_idx.emplace(id, full_path.string());
 
 	if (id > m_largest_id) {
 		m_largest_id = id;
@@ -58,7 +60,7 @@ bool datadir::add(const std::string& datafile_path) {
 
 bool datadir::add(datafile& file) {
 	// Get the filename from the datafile
-	std::string filename = file.get_catfile_name();
+	std::string filename = std::filesystem::absolute(file.get_catfile_name()).string();
 	if (filename.empty()) {
 		return false;
 	}
@@ -98,6 +100,25 @@ datafile* datadir::search(const std::string& filename, bool strict_match) {
 
 	// File not found in any datafile
 	return nullptr;
+}
+
+std::map<std::string, datafile*> datadir::build_precedence_map() {
+	std::map<std::string, datafile*> file_precedence;
+
+	for (uint32_t curr = m_largest_id; curr > 0; --curr) {
+		auto it = m_dir_idx.find(curr);
+		if (it != m_dir_idx.end()) {
+			datafile& df = it->second;
+			auto file_list = df.get_file_list();
+			for (const auto& filepath : file_list) {
+				if (file_precedence.find(filepath) == file_precedence.end()) {
+					file_precedence[filepath] = &df;
+				}
+			}
+		}
+	}
+
+	return file_precedence;
 }
 
 bool datadir::extract(const std::filesystem::path& target_path) {
