@@ -135,6 +135,7 @@ private:
 				continue;
 			}
 
+			m_files.erase(norm_path);
 			m_files.emplace(norm_path, virtual_file{virtual_file::kind::Catalog, df, *record, {}, record->size});
 			add_path(norm_path);
 		}
@@ -340,6 +341,8 @@ static int x3_read(const char* path, char* buf, size_t size, off_t offset, struc
 	if (vf->type == virtual_file::kind::Catalog) {
 		std::string data;
 		if (!vf->source->read_file_range(vf->record, static_cast<size_t>(offset), size, data)) {
+			std::cerr << "read_file_range failed for " << vf->record.relpath << " offset " << offset << " size "
+			          << size << " dat " << vf->source->get_datfile_name() << std::endl;
 			return -EIO;
 		}
 

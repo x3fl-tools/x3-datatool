@@ -74,6 +74,7 @@ bool datafile::parse(const std::filesystem::path& catfilename) {
 	uint32_t running_offset = 0;
 	uint32_t lineptr = 0;
 	uint32_t last_space = 0;
+	bool first_line = true;
 	uint8_t magic = init_magic;
 	for (uint32_t idx = 0; idx < encrypted_cat.size(); ++idx) {
 		const char line_end = 0x0a;
@@ -82,14 +83,15 @@ bool datafile::parse(const std::filesystem::path& catfilename) {
 
 		// Parse the line into an index entry
 		if (m_unencrypted_cat[idx] == line_end) {
-			if (last_space == 0) { // This is the first entry in the file
-				datfilename = std::string((char*)m_unencrypted_cat.data(), idx);
-			} else {
+			if (first_line) {
+				datfilename = std::string((char*)&m_unencrypted_cat[lineptr], idx - lineptr);
+				first_line = false;
+			} else if (last_space > lineptr && last_space < idx) {
 				m_index.emplace_back(
 					(char*)&m_unencrypted_cat[lineptr], last_space - lineptr, idx - lineptr, running_offset);
 				running_offset += m_index.back().size;
 			}
-			lineptr = idx + 1;
+			last_space = lineptr = idx + 1;
 		} else if (m_unencrypted_cat[idx] == ' ') {
 			last_space = idx;
 		}
@@ -121,6 +123,8 @@ bool datafile::read_file_range(const file_record& record, size_t offset, size_t 
 
 	std::ifstream encoded_datafile(m_datfile, std::ios::in | std::ios::binary);
 	if (!encoded_datafile) {
+		std::ofstream("/tmp/x3fuse.log", std::ios::app)
+			<< "read_file_range: unable to open dat file " << m_datfile << "\n";
 		return false;
 	}
 
@@ -135,6 +139,9 @@ bool datafile::read_file_range(const file_record& record, size_t offset, size_t 
 	encoded_datafile.read(buffer.data(), read_len);
 	const auto got = static_cast<size_t>(encoded_datafile.gcount());
 	if (got == 0 && read_len > 0) {
+		std::ofstream("/tmp/x3fuse.log", std::ios::app)
+			<< "read_file_range: short read from " << m_datfile << " at offset " << record.offset + offset
+			<< " requested " << read_len << " record.size " << record.size << "\n";
 		return false;
 	}
 
